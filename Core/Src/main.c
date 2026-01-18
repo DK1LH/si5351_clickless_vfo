@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "si5351.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
