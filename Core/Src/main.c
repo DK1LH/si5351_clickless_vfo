@@ -90,7 +90,14 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+  si5351_stm32_i2c_ctx_t ctx = { .hi2c = &hi2c1, .is_ready_timeout_ms = 20, .is_ready_tries = 3 };
+  si5351_bus_t bus = si5351_bus_from_stm32_hal(&ctx);
 
+  si5351_t si;
+  si5351_Setup(&si, bus, 0x60, 25000000, 1500);
+  si5351_Init(&si);
+  si5351_SetFrequency(&si, SI5351_PLLA, SI5351_CLK0, 7000000);
+  si5351_SetFrequency(&si, SI5351_PLLB, SI5351_CLK1, 14000000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
