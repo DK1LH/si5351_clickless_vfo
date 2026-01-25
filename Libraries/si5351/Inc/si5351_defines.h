@@ -7,6 +7,7 @@
 #include "si5351_bus_adaptor.h"
 
 #define SI5351_PLL_MAX_FREQ 900000000
+#define SI5351_NUM_CLKS 3
 
 #define SI5351_REG_SPREAD_SPECTRUM_PARAMS_1 149
 #define SI5351_REG_CLK0_CONTROL 16
@@ -36,15 +37,16 @@ typedef enum {
 } si5351_clk_output_current_t;
 
 typedef struct {
-    uint32_t outDivider;
-    uint8_t R;
-    
-    // Clock control register
     bool powerDown;
     bool integerMode;
     si5351_pll_num_t msPLLSource;
     bool inverted;
     si5351_clk_output_current_t outputCurrent;
+} si5351_clk_ctrl_t;
+
+typedef struct {
+    uint32_t outDivider;
+    uint8_t clkCtrlRegVal;
 } si5351_clk_t;
 
 typedef struct {
@@ -52,7 +54,7 @@ typedef struct {
     uint16_t i2cAddress;
     uint32_t xtalFrequency;
     uint32_t xtalCorrection;
-    si5351_clk_t clks[3];
+    si5351_clk_t clks[SI5351_NUM_CLKS];
 } si5351_t;
 
 #endif

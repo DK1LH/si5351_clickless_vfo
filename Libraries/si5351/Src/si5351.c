@@ -1,12 +1,13 @@
 #include "si5351.h"
 #include "si5351_bus_adaptor.h"
 #include "si5351_defines.h"
+#include <stdint.h>
 
 
 /*
  * @brief Private function for reading registers
  */
-si5351_status_t si5351_ReadReg(si5351_t *h, uint8_t reg, uint8_t *val) {
+static inline si5351_status_t si5351_ReadReg(const si5351_t *h, const uint8_t reg, uint8_t *val) {
     if (!h || !val) return SI5351_EINVAL;
     return h->busAdaptor.read(h->busAdaptor.ctx, h->i2cAddress, reg, val, 1);
 }
@@ -14,7 +15,7 @@ si5351_status_t si5351_ReadReg(si5351_t *h, uint8_t reg, uint8_t *val) {
 /*
  * @brief Private function for writing one register
  */
-si5351_status_t si5351_WriteReg(si5351_t *h, uint8_t reg, uint8_t val) {
+static inline si5351_status_t si5351_WriteReg(const si5351_t *h, const uint8_t reg, const uint8_t val) {
     if (!h) return SI5351_EINVAL;
     return h->busAdaptor.write(h->busAdaptor.ctx, h->i2cAddress, reg, &val, 1);
 }
@@ -22,7 +23,7 @@ si5351_status_t si5351_WriteReg(si5351_t *h, uint8_t reg, uint8_t val) {
 /*
  * @brief Private function for writing multiple registers
  */
-si5351_status_t si5351_WriteRegs(si5351_t *h, uint8_t regStart, uint8_t* vals, uint8_t length)
+static inline si5351_status_t si5351_WriteRegs(const si5351_t *h, const uint8_t regStart, const uint8_t* vals, const uint8_t length)
 {
 	if (!h) return SI5351_EINVAL;
 	return h->busAdaptor.write(h->busAdaptor.ctx, h->i2cAddress, regStart, vals, length);
@@ -31,7 +32,7 @@ si5351_status_t si5351_WriteRegs(si5351_t *h, uint8_t regStart, uint8_t* vals, u
 /*
  * @brief Private function for resetting PLLx
  */
-si5351_status_t si5351_ResetPll(si5351_t* si5351, si5351_pll_num_t pll)
+static inline si5351_status_t si5351_ResetPll(const si5351_t* si5351, const si5351_pll_num_t pll)
 {
     if(!si5351) return SI5351_EINVAL;
     
@@ -51,30 +52,70 @@ si5351_status_t si5351_ResetPll(si5351_t* si5351, si5351_pll_num_t pll)
 }
 
 /*
- * @brief Private function for writing the clock control register of CLKx
+ * @brief Private function for creating a ClkCtrl register value from the struct representation
  */
-si5351_status_t si5351_WriteClkCtrlRegister(si5351_t* si5351, si5351_clk_num_t clk)
+static inline uint8_t si5351_PackClkCtrlRegVal(const si5351_clk_ctrl_t clkCtrl)
 {
-    if (!si5351) return SI5351_EINVAL;
+    uint8_t regVal = 0b00001100; //CLKx always uses MSx
+	regVal |= clkCtrl.powerDown ? (1u << 7) : 0u;
+	regVal |= clkCtrl.integerMode ? (1u << 6) : 0u;
+	regVal |= (uint8_t)((clkCtrl.msPLLSource & 0x01u) << 5);
+	regVal |= clkCtrl.inverted ? (1u << 4) : 0u;
+	regVal |= (uint8_t)(clkCtrl.outputCurrent & 0x03u);
 
-	uint8_t regVal = 0b00001100; //CLKx always uses MSx
-	regVal |= si5351->clks[clk].powerDown ? (1 << 7) : 0;
-	regVal |= si5351->clks[clk].integerMode ? (1 << 6) : 0;
-	regVal |= (si5351->clks[clk].msPLLSource << 5);
-	regVal |= si5351->clks[clk].inverted ? (1 << 4) : 0;
-	regVal |= si5351->clks[clk].outputCurrent;
+    return regVal;
+}
 
-    return si5351_WriteReg(si5351, SI5351_REG_CLK0_CONTROL + clk, regVal);
+/*
+ * @brief Private function for creating the struct representation from a ClkCtrl register value
+ */
+static inline si5351_clk_ctrl_t si5351_UnpackClkCtrlRegVal(const uint8_t regVal)
+{
+    si5351_clk_ctrl_t clkCtrl =
+    {
+        .powerDown = ((regVal >> 7) & 1) ? true : false,
+        .integerMode = ((regVal >> 6) & 1) ? true : false,
+        .msPLLSource = (si5351_pll_num_t)((regVal >> 5) & 0x01u),
+        .inverted = ((regVal >> 4) & 1) ? true : false,
+        .outputCurrent = (si5351_clk_output_current_t)(regVal & 0x03u)
+    };
+
+    return clkCtrl;
+}
+
+/*
+ * @brief Private function for ensuring that a ClkCtrl register has a desired value
+ */
+static inline si5351_status_t si5351_EnsureClkCtrl(si5351_t* si5351, const si5351_clk_num_t clk, const si5351_clk_ctrl_t clkCtrl)
+{
+    if(!si5351 || (clk >= SI5351_NUM_CLKS)) return SI5351_EINVAL;
+
+    uint8_t clkCtrlNewRegval = si5351_PackClkCtrlRegVal(clkCtrl);
+    if(si5351->clks[clk].clkCtrlRegVal == clkCtrlNewRegval)
+    {
+        return SI5351_OK;
+    }
+
+    si5351->clks[clk].clkCtrlRegVal = clkCtrlNewRegval;
+    return si5351_WriteReg(si5351, SI5351_REG_CLK0_CONTROL + clk, clkCtrlNewRegval);
 }
 
 
-si5351_status_t si5351_Setup(si5351_t *si5351, si5351_bus_t busAdaptor, uint8_t i2cAddress, uint32_t xtalFrequency, int32_t xtalCorrection)
+si5351_status_t si5351_Setup(si5351_t *si5351, const si5351_bus_t busAdaptor, const uint8_t i2cAddress, const uint32_t xtalFrequency, const int32_t xtalCorrection)
 {
     if(!si5351) return SI5351_EINVAL;
 
     si5351->busAdaptor = busAdaptor;
     si5351->i2cAddress = i2cAddress;
     si5351->xtalFrequency = xtalFrequency + xtalCorrection;
+    
+    si5351_status_t commResult;
+    for(uint8_t clk = 0; clk < SI5351_NUM_CLKS; ++clk)
+    {
+        commResult = si5351_ReadReg(si5351, SI5351_REG_CLK0_CONTROL + clk, &si5351->clks[clk].clkCtrlRegVal);
+        if(commResult != SI5351_OK) return commResult;
+    }
+
     return SI5351_OK;
 }
 
@@ -87,47 +128,51 @@ si5351_status_t si5351_Init(si5351_t* si5351)
     uint8_t regVal = 0;
     commResult = si5351_ReadReg(si5351, SI5351_REG_SPREAD_SPECTRUM_PARAMS_1, &regVal);
     if(commResult != SI5351_OK) return commResult;
-    regVal &= ~(1 << 7);
+    regVal &= ~(1u << 7);
     commResult = si5351_WriteReg(si5351, SI5351_REG_SPREAD_SPECTRUM_PARAMS_1, regVal);
     if(commResult != SI5351_OK) return commResult;
 
     // Setting up the clock register (needed because CLKx should use MSx for output)
-    for(uint8_t i = 0; i <= 2; i++)
+    const si5351_clk_ctrl_t clkCtrl = {
+        .powerDown = false,
+        .integerMode = true,
+        .msPLLSource = SI5351_PLLA,
+        .inverted = false,
+        .outputCurrent = SI5351_OUT_2MA
+    };
+    for(uint8_t clk = 0; clk < SI5351_NUM_CLKS; ++clk)
     {   
-        commResult = si5351_WriteClkCtrlRegister(si5351, i);
+        commResult = si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
         if(commResult != SI5351_OK) return commResult;
     }
 
     return commResult;
 }
 
-si5351_status_t si5351_SetOutputCurrent(si5351_t* si5351, si5351_clk_num_t clk, si5351_clk_output_current_t outputCurrent)
+si5351_status_t si5351_SetOutputCurrent(si5351_t* si5351, const si5351_clk_num_t clk, const si5351_clk_output_current_t outputCurrent)
 {
-    if(!si5351) return SI5351_EINVAL;
-
-    si5351->clks[clk].outputCurrent = outputCurrent;
-    return si5351_WriteClkCtrlRegister(si5351, clk);
+    if(!si5351 || (clk >= SI5351_NUM_CLKS)) return SI5351_EINVAL;
+    si5351_clk_ctrl_t clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clk].clkCtrlRegVal);
+    clkCtrl.outputCurrent = outputCurrent;
+    return si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
 }
 
-
-si5351_status_t si5351_SetFrequency(si5351_t* si5351, si5351_pll_num_t pll, si5351_clk_num_t clk, uint32_t frequency)
+si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll, const si5351_clk_num_t clk, const uint32_t frequency)
 {
-    if (!si5351) return SI5351_EINVAL;
+    if (!si5351 || (clk >= SI5351_NUM_CLKS) || frequency == 0) return SI5351_EINVAL;
+    si5351_status_t commResult;
 
-    si5351_status_t commResult = SI5351_OK;
-    if(!si5351->clks[clk].integerMode || si5351->clks[clk].msPLLSource != pll || si5351->clks[clk].inverted)
-    {
-        si5351->clks[clk].integerMode = true;
-        si5351->clks[clk].msPLLSource = pll;
-        si5351->clks[clk].inverted = false;
-        commResult = si5351_WriteClkCtrlRegister(si5351, clk);
-
-        if(commResult != SI5351_OK) return commResult;
-    }
+    si5351_clk_ctrl_t clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clk].clkCtrlRegVal);
+    clkCtrl.powerDown = false;
+    clkCtrl.integerMode = true;
+    clkCtrl.msPLLSource = pll;
+    clkCtrl.inverted = false;
+    commResult = si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
+    if(commResult != SI5351_OK) return commResult;
 
     // Finding an even out divider 
     uint32_t outDivider = SI5351_PLL_MAX_FREQ / frequency;
-    if(outDivider % 2) outDivider--;
+    outDivider &= ~1u;
 
     // Calculating the actual frequency of PLLx
     uint32_t frequencyPLLx = outDivider * frequency;
@@ -143,7 +188,7 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, si5351_pll_num_t pll, si53
     uint32_t MSNxP2 = 128 * b - f * c;
     uint32_t MSNxP3 = c;
 
-    uint8_t PLLxMSNxParams[] =
+    uint8_t PLLxMSNxParams[8] =
     {
     (MSNxP3 & 0xFF00) >> 8,                                     // Bits [15:8] of MSNx_P3 in register 26
 	MSNxP3 & 0xFF,
@@ -162,7 +207,7 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, si5351_pll_num_t pll, si53
         si5351->clks[clk].outDivider = outDivider;
 
         uint32_t MSxP1 = 128 * outDivider - 512;
-        uint8_t CLKxMSxParams[] =
+        uint8_t CLKxMSxParams[8] =
 	    {
         0, 								// Bits [15:8] of MS0_P3 (always 0) in register 42
 		1,            					// Bits [7:0]  of MS0_P3 (always 1) in register 43
@@ -189,9 +234,10 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, si5351_pll_num_t pll, si53
 }
 
 
+/*
 si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, si5351_pll_num_t pll, si5351_clk_num_t clkA, si5351_clk_num_t clkB, uint32_t frequency)
 {
-    if (!si5351) return SI5351_EINVAL;
+    if (!si5351 || frequency == 0) return SI5351_EINVAL;
 
     si5351_status_t commResult = SI5351_OK;
     if(si5351->clks[clkA].integerMode || si5351->clks[clkA].msPLLSource != pll || si5351->clks[clkB].msPLLSource != pll || si5351->clks[clkB].integerMode)
@@ -209,14 +255,15 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, si5351_pll_num_t pll, si
     }
 
     
-    // Finding an even out divider that has a maximum value of 126
+    // Finding an even out divider 
     uint32_t outDivider = SI5351_PLL_MAX_FREQ / frequency;
+    outDivider &= ~1u;
+
     if(outDivider > 126)
     {
         outDivider = 126;
     }
     
-    if(outDivider % 2) outDivider--;
 
     // Calculating the actual frequency of PLLx
     uint32_t frequencyPLLx = outDivider * frequency;
@@ -232,7 +279,7 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, si5351_pll_num_t pll, si
     uint32_t MSNxP2 = 128 * b - f * c;
     uint32_t MSNxP3 = c;
 
-    uint8_t PLLxMSNxParams[] =
+    uint8_t PLLxMSNxParams[8] =
     {
     (MSNxP3 & 0xFF00) >> 8,                                     // Bits [15:8] of MSNx_P3 in register 26
 	MSNxP3 & 0xFF,
@@ -251,7 +298,7 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, si5351_pll_num_t pll, si
         si5351->clks[clkA].outDivider = outDivider;
 
         uint32_t MSxP1 = 128 * outDivider - 512;
-        uint8_t CLKxMSxParams[] =
+        uint8_t CLKxMSxParams[8] =
 	    {
         0, 								// Bits [15:8] of MS0_P3 (always 0) in register 42
 		1,            					// Bits [7:0]  of MS0_P3 (always 1) in register 43
@@ -280,3 +327,5 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, si5351_pll_num_t pll, si
 
     return commResult;
 }
+
+*/
