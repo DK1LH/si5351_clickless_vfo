@@ -6,7 +6,7 @@
 
 #include "si5351_bus_adaptor.h"
 
-#define SI5351_PLL_MAX_FREQ 900000000
+#define SI5351_PLL_TARGET_FREQ 750000000
 #define SI5351_NUM_CLKS 3
 
 #define SI5351_REG_SPREAD_SPECTRUM_PARAMS_1 149
@@ -46,6 +46,8 @@ typedef struct {
 
 typedef struct {
     uint32_t outDivider;
+    uint8_t R;
+    uint8_t phaseOffset;
     uint8_t clkCtrlRegVal;
 } si5351_clk_t;
 
