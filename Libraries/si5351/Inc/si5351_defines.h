@@ -30,6 +30,11 @@ typedef enum {
 } si5351_pll_num_t;
 
 typedef enum {
+    SI5351_PH_90 = 0,
+    SI5351_PH_180 = 1
+} si5351_ph_offset_t;
+
+typedef enum {
 	SI5351_OUT_2MA = 0,
 	SI5351_OUT_4MA = 1,
 	SI5351_OUT_6MA = 2,

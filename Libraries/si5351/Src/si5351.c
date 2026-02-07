@@ -233,8 +233,12 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
     if (!si5351 || (clk >= SI5351_NUM_CLKS) || frequency == 0) return SI5351_EINVAL;
     si5351_status_t commResult;
 
+    // Preparing a flag for reset if clk was inverted
+    bool pllResetInv = false;
+    
     // Ensuring that clk is powered-up and in integer mode
     si5351_clk_ctrl_t clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clk].clkCtrlRegVal);
+    pllResetInv = (clkCtrl.inverted != false);
     clkCtrl.powerDown = false;
     clkCtrl.integerMode = true;
     clkCtrl.msPLLSource = pll;
@@ -262,7 +266,7 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
     si5351_GeneratePLLxMSNxParams(frequencyPLLx, si5351->xtalFrequency, PLLxMSNxParams);
 
     // Checking whether updating the CLK's MultiSynth (OMD) is necessary (PLL reset needed)
-    if(si5351->clks[clk].outDivider != outDivider || si5351->clks[clk].R != R || si5351->clks[clk].phaseOffset != 0)
+    if(si5351->clks[clk].outDivider != outDivider || si5351->clks[clk].R != R || si5351->clks[clk].phaseOffset != 0 || pllResetInv)
     {
         // Updating the outDivider and R of CLKx
         si5351->clks[clk].outDivider = outDivider;
@@ -289,13 +293,17 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
     return commResult;
 }
 
-si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, const si5351_pll_num_t pll, const si5351_clk_num_t clkA, const si5351_clk_num_t clkB, const uint32_t frequency)
+si5351_status_t si5351_SetFrequencyPhase(si5351_t* si5351, const si5351_pll_num_t pll, const si5351_clk_num_t clkA, const si5351_clk_num_t clkB, const uint32_t frequency, const si5351_ph_offset_t phOffset)
 {
     if (!si5351 || (clkA >= SI5351_NUM_CLKS) || (clkB >= SI5351_NUM_CLKS) || frequency == 0) return SI5351_EINVAL;
     si5351_status_t commResult;
 
+    // Preparing a flag for reset if one if the clks was inverted
+    bool pllResetInv = false;
+
     // Ensuring that clkA is powered-up and in fractional mode
     si5351_clk_ctrl_t clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clkA].clkCtrlRegVal);
+    pllResetInv = (clkCtrl.inverted != false);
     clkCtrl.powerDown = false;
     clkCtrl.integerMode = false;
     clkCtrl.msPLLSource = pll;
@@ -305,10 +313,11 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, const si5351_pll_num_t p
 
     // Ensuring that clkB is powered-up and in fractional mode
     clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clkB].clkCtrlRegVal);
+    pllResetInv |=  (clkCtrl.inverted != (phOffset == SI5351_PH_180));
     clkCtrl.powerDown = false;
     clkCtrl.integerMode = false;
     clkCtrl.msPLLSource = pll;
-    clkCtrl.inverted = false;
+    clkCtrl.inverted = (phOffset == SI5351_PH_180) ? true : false;
     commResult = si5351_EnsureClkCtrl(si5351, clkB, clkCtrl);
     if(commResult != SI5351_OK) return commResult;
 
@@ -324,8 +333,11 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, const si5351_pll_num_t p
     uint8_t PLLxMSNxParams[8];
     si5351_GeneratePLLxMSNxParams(frequencyPLLx, si5351->xtalFrequency, PLLxMSNxParams);
 
+    // Setting the phase offset to out divider if 90 deg offset
+    uint8_t phaseOffset = (phOffset == SI5351_PH_90) ? outDivider : 0;
+
     // Checking whether updating the CLK's MultiSynth (OMD) is necessary (PLL reset needed)
-    if(si5351->clks[clkA].outDivider != outDivider || si5351->clks[clkB].outDivider != outDivider || si5351->clks[clkA].R != 1 || si5351->clks[clkB].R != 1 || si5351->clks[clkA].phaseOffset != 0 || si5351->clks[clkB].phaseOffset != outDivider)
+    if(si5351->clks[clkA].outDivider != outDivider || si5351->clks[clkB].outDivider != outDivider || si5351->clks[clkA].R != 1 || si5351->clks[clkB].R != 1 || si5351->clks[clkA].phaseOffset != 0 || si5351->clks[clkB].phaseOffset != phaseOffset || pllResetInv)
     {
         // Updating the outDivider and R of CLKx
         si5351->clks[clkA].outDivider = outDivider;
@@ -333,7 +345,7 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, const si5351_pll_num_t p
         si5351->clks[clkA].R = 1;
         si5351->clks[clkB].R = 1;
         si5351->clks[clkA].phaseOffset = 0;
-        si5351->clks[clkB].phaseOffset = outDivider;
+        si5351->clks[clkB].phaseOffset = phaseOffset;
 
         // Generating the register map for MSx of CLKx
         uint8_t CLKxMSxParams[8];
@@ -347,7 +359,7 @@ si5351_status_t si5351_SetFrequencyIQ(si5351_t* si5351, const si5351_pll_num_t p
         if(commResult != SI5351_OK) return commResult;
         commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clkA, 0);
         if(commResult != SI5351_OK) return commResult;
-        commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clkB, outDivider);
+        commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clkB, phaseOffset);
         if(commResult != SI5351_OK) return commResult;
         commResult = si5351_ResetPll(si5351, pll);
     }
