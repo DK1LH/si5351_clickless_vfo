@@ -7,16 +7,26 @@
 /*
  * @brief Private function for reading registers
  */
-static inline si5351_status_t si5351_ReadReg(const si5351_t *h, const uint8_t reg, uint8_t *val) {
-    if (!h || !val) return SI5351_EINVAL;
+static inline si5351_status_t si5351_ReadReg(const si5351_t *h, const uint8_t reg, uint8_t *val)
+{
+    if (!h || !val)
+    {
+        return SI5351_EINVAL;
+    }
+
     return h->busAdaptor.read(h->busAdaptor.ctx, h->i2cAddress, reg, val, 1);
 }
 
 /*
  * @brief Private function for writing one register
  */
-static inline si5351_status_t si5351_WriteReg(const si5351_t *h, const uint8_t reg, const uint8_t val) {
-    if (!h) return SI5351_EINVAL;
+static inline si5351_status_t si5351_WriteReg(const si5351_t *h, const uint8_t reg, const uint8_t val)
+{
+    if (!h)
+    {
+        return SI5351_EINVAL;
+    }
+
     return h->busAdaptor.write(h->busAdaptor.ctx, h->i2cAddress, reg, &val, 1);
 }
 
@@ -25,7 +35,11 @@ static inline si5351_status_t si5351_WriteReg(const si5351_t *h, const uint8_t r
  */
 static inline si5351_status_t si5351_WriteRegs(const si5351_t *h, const uint8_t regStart, const uint8_t* vals, const uint8_t length)
 {
-	if (!h) return SI5351_EINVAL;
+	if (!h)
+    {
+        return SI5351_EINVAL;
+    }
+
 	return h->busAdaptor.write(h->busAdaptor.ctx, h->i2cAddress, regStart, vals, length);
 }
 
@@ -34,10 +48,14 @@ static inline si5351_status_t si5351_WriteRegs(const si5351_t *h, const uint8_t 
  */
 static inline si5351_status_t si5351_ResetPll(const si5351_t* si5351, const si5351_pll_num_t pll)
 {
-    if(!si5351) return SI5351_EINVAL;
+    if(!si5351)
+    {
+        return SI5351_EINVAL;
+    }
     
     uint8_t regVal = 0;
-    switch (pll) {
+    switch (pll)
+    {
         case SI5351_PLLA:
             regVal = 0b00100000;
             break;
@@ -47,6 +65,7 @@ static inline si5351_status_t si5351_ResetPll(const si5351_t* si5351, const si53
         default:
             return SI5351_EINVAL;
     }
+
     return si5351_WriteReg(si5351, SI5351_REG_PLL_RESET, regVal);
 }
 
@@ -87,7 +106,10 @@ static inline si5351_clk_ctrl_t si5351_UnpackClkCtrlRegVal(const uint8_t regVal)
  */
 static inline si5351_status_t si5351_EnsureClkCtrl(si5351_t* si5351, const si5351_clk_num_t clk, const si5351_clk_ctrl_t clkCtrl)
 {
-    if(!si5351 || (clk >= SI5351_NUM_CLKS)) return SI5351_EINVAL;
+    if(!si5351 || (clk >= SI5351_NUM_CLKS))
+    {
+        return SI5351_EINVAL;
+    }
 
     uint8_t clkCtrlNewRegval = si5351_PackClkCtrlRegVal(clkCtrl);
     if(si5351->clks[clk].clkCtrlRegVal == clkCtrlNewRegval)
@@ -131,7 +153,8 @@ static inline void si5351_GeneratePLLxMSNxParams(const uint32_t frequencyPLLx, c
 static inline void si5351_GenerateCLKxMSxParams(const uint32_t outDivider, const uint8_t R, uint8_t outCLKxMSxParams[8])
 {
     uint8_t regValR = 0;
-    switch (R) {
+    switch (R)
+    {
         case 1:   regValR = 0; break;
         case 2:   regValR = 16; break;
         case 4:   regValR = 32; break;
@@ -143,7 +166,8 @@ static inline void si5351_GenerateCLKxMSxParams(const uint32_t outDivider, const
         default: regValR = 0; break;
     }
     
-    if (outDivider == 4 ) {
+    if (outDivider == 4 )
+    {
         regValR |= 0x0C;    // bit set OR mask for MSYNTH divide by 4, for reg 44 {3:2]
     }
 
@@ -163,15 +187,26 @@ static inline void si5351_GenerateCLKxMSxParams(const uint32_t outDivider, const
  */
 static inline uint32_t ClampU32(const uint32_t x, const uint32_t min, const uint32_t max)
 {
-    if (x < min) return min;
-    if (x > max) return max;
+    if (x < min)
+    {
+        return min;
+    }
+
+    if (x > max)
+    {
+        return max;
+    }
+    
     return x;
 }
 
 
 si5351_status_t si5351_Setup(si5351_t *si5351, const si5351_bus_t busAdaptor, const uint8_t i2cAddress, const uint32_t xtalFrequency, const int32_t xtalCorrection)
 {
-    if(!si5351) return SI5351_EINVAL;
+    if(!si5351)
+    {
+        return SI5351_EINVAL;
+    }
 
     si5351->busAdaptor = busAdaptor;
     si5351->i2cAddress = i2cAddress;
@@ -184,7 +219,10 @@ si5351_status_t si5351_Setup(si5351_t *si5351, const si5351_bus_t busAdaptor, co
         si5351->clks[clk].R = 0;
         si5351->clks[clk].phaseOffset = 0;
         commResult = si5351_ReadReg(si5351, SI5351_REG_CLK0_CONTROL + clk, &si5351->clks[clk].clkCtrlRegVal);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
     }
 
     return SI5351_OK;
@@ -192,19 +230,29 @@ si5351_status_t si5351_Setup(si5351_t *si5351, const si5351_bus_t busAdaptor, co
 
 si5351_status_t si5351_Init(si5351_t* si5351)
 {
-    if(!si5351) return SI5351_EINVAL;
+    if(!si5351)
+    {
+        return SI5351_EINVAL;
+    }
 
     // Turning off spread spectrum mode (undefined after power-up)
     si5351_status_t commResult;
     uint8_t regVal = 0;
     commResult = si5351_ReadReg(si5351, SI5351_REG_SPREAD_SPECTRUM_PARAMS_1, &regVal);
-    if(commResult != SI5351_OK) return commResult;
+    if(commResult != SI5351_OK)
+    {
+        return commResult;
+    }
     regVal &= ~(1u << 7);
     commResult = si5351_WriteReg(si5351, SI5351_REG_SPREAD_SPECTRUM_PARAMS_1, regVal);
-    if(commResult != SI5351_OK) return commResult;
+    if(commResult != SI5351_OK)
+    {
+        return commResult;
+    }
 
     // Setting up the clock register (needed because CLKx should use MSx for output)
-    const si5351_clk_ctrl_t clkCtrl = {
+    const si5351_clk_ctrl_t clkCtrl = 
+    {
         .powerDown = false,
         .integerMode = true,
         .msPLLSource = SI5351_PLLA,
@@ -214,7 +262,10 @@ si5351_status_t si5351_Init(si5351_t* si5351)
     for(uint8_t clk = 0; clk < SI5351_NUM_CLKS; ++clk)
     {   
         commResult = si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
     }
 
     return commResult;
@@ -222,7 +273,11 @@ si5351_status_t si5351_Init(si5351_t* si5351)
 
 si5351_status_t si5351_SetOutputCurrent(si5351_t* si5351, const si5351_clk_num_t clk, const si5351_clk_output_current_t outputCurrent)
 {
-    if(!si5351 || (clk >= SI5351_NUM_CLKS)) return SI5351_EINVAL;
+    if(!si5351 || (clk >= SI5351_NUM_CLKS))
+    {
+        return SI5351_EINVAL;
+    }
+
     si5351_clk_ctrl_t clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clk].clkCtrlRegVal);
     clkCtrl.outputCurrent = outputCurrent;
     return si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
@@ -230,7 +285,11 @@ si5351_status_t si5351_SetOutputCurrent(si5351_t* si5351, const si5351_clk_num_t
 
 si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll, const si5351_clk_num_t clk, const uint32_t frequency)
 {
-    if (!si5351 || (clk >= SI5351_NUM_CLKS) || frequency == 0) return SI5351_EINVAL;
+    if (!si5351 || (clk >= SI5351_NUM_CLKS) || frequency == 0)
+    {
+        return SI5351_EINVAL;
+    }
+
     si5351_status_t commResult;
 
     // Preparing a flag for reset if clk was inverted
@@ -244,7 +303,10 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
     clkCtrl.msPLLSource = pll;
     clkCtrl.inverted = false;
     commResult = si5351_EnsureClkCtrl(si5351, clk, clkCtrl);
-    if(commResult != SI5351_OK) return commResult;
+    if(commResult != SI5351_OK)
+    {
+        return commResult;
+    }
 
     // Finding an even out divider between 4 and 900
     uint32_t outDivider = SI5351_PLL_TARGET_FREQ / frequency;
@@ -278,11 +340,20 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
         si5351_GenerateCLKxMSxParams(outDivider, R, CLKxMSxParams);
 
         commResult = si5351_WriteRegs(si5351, SI5351_REG_MULTISYNTH_NA_PARAMS_BASE + (pll * SI5351_REG_MULTISYNTH_NA_PARAMS_NB_PARAMS_OFFSET), PLLxMSNxParams, 8);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteRegs(si5351, SI5351_REG_MULTISYNTH0_PARAMS + (SI5351_REG_MULTISYNTHx_PARAMS_OFFSET * clk), CLKxMSxParams, 8);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clk, 0);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_ResetPll(si5351, pll);
     }
     else
@@ -295,7 +366,11 @@ si5351_status_t si5351_SetFrequency(si5351_t* si5351, const si5351_pll_num_t pll
 
 si5351_status_t si5351_SetFrequencyPhase(si5351_t* si5351, const si5351_pll_num_t pll, const si5351_clk_num_t clkA, const si5351_clk_num_t clkB, const uint32_t frequency, const si5351_ph_offset_t phOffset)
 {
-    if (!si5351 || (clkA >= SI5351_NUM_CLKS) || (clkB >= SI5351_NUM_CLKS) || frequency == 0) return SI5351_EINVAL;
+    if (!si5351 || (clkA >= SI5351_NUM_CLKS) || (clkB >= SI5351_NUM_CLKS) || frequency == 0)
+    {
+        return SI5351_EINVAL;
+    }
+
     si5351_status_t commResult;
 
     // Preparing a flag for reset if one if the clks was inverted
@@ -309,7 +384,10 @@ si5351_status_t si5351_SetFrequencyPhase(si5351_t* si5351, const si5351_pll_num_
     clkCtrl.msPLLSource = pll;
     clkCtrl.inverted = false;
     commResult = si5351_EnsureClkCtrl(si5351, clkA, clkCtrl);
-    if(commResult != SI5351_OK) return commResult;
+    if(commResult != SI5351_OK)
+    {
+        return commResult;
+    }
 
     // Ensuring that clkB is powered-up and in fractional mode
     clkCtrl = si5351_UnpackClkCtrlRegVal(si5351->clks[clkB].clkCtrlRegVal);
@@ -319,7 +397,10 @@ si5351_status_t si5351_SetFrequencyPhase(si5351_t* si5351, const si5351_pll_num_
     clkCtrl.msPLLSource = pll;
     clkCtrl.inverted = (phOffset == SI5351_PH_180) ? true : false;
     commResult = si5351_EnsureClkCtrl(si5351, clkB, clkCtrl);
-    if(commResult != SI5351_OK) return commResult;
+    if(commResult != SI5351_OK)
+    {
+        return commResult;
+    }
 
     // Finding an even out divider between 4 and 126
     uint32_t outDivider = SI5351_PLL_TARGET_FREQ / frequency;
@@ -352,15 +433,30 @@ si5351_status_t si5351_SetFrequencyPhase(si5351_t* si5351, const si5351_pll_num_
         si5351_GenerateCLKxMSxParams(outDivider, 1, CLKxMSxParams);
 
         commResult = si5351_WriteRegs(si5351, SI5351_REG_MULTISYNTH_NA_PARAMS_BASE + (pll * SI5351_REG_MULTISYNTH_NA_PARAMS_NB_PARAMS_OFFSET), PLLxMSNxParams, 8);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteRegs(si5351, SI5351_REG_MULTISYNTH0_PARAMS + (SI5351_REG_MULTISYNTHx_PARAMS_OFFSET * clkA), CLKxMSxParams, 8);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteRegs(si5351, SI5351_REG_MULTISYNTH0_PARAMS + (SI5351_REG_MULTISYNTHx_PARAMS_OFFSET * clkB), CLKxMSxParams, 8);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clkA, 0);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_WriteReg(si5351, SI5351_REG_CLK0_PHASE_OFFSET + clkB, phaseOffset);
-        if(commResult != SI5351_OK) return commResult;
+        if(commResult != SI5351_OK)
+        {
+            return commResult;
+        }
         commResult = si5351_ResetPll(si5351, pll);
     }
     else
