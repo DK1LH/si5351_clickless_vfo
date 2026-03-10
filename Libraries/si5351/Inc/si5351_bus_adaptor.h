@@ -15,7 +15,6 @@ typedef struct {
     void *ctx;
     si5351_status_t (*read)(void *ctx, uint8_t i2c_addr, uint8_t reg, uint8_t *buf, size_t len);
     si5351_status_t (*write)(void *ctx, uint8_t i2c_addr, uint8_t reg, const uint8_t *buf, size_t len);
-    void (*delay_ms)(void *ctx, uint32_t ms);
 } si5351_bus_t;
 
 typedef struct {
@@ -25,6 +24,6 @@ typedef struct {
 } si5351_stm32_i2c_ctx_t;
 
 // Function to create a si5351_bus_t from si5351_stm32_i2c_ctx_t
-si5351_bus_t si5351_bus_from_stm32_hal(si5351_stm32_i2c_ctx_t *ctx);
+si5351_bus_t si5351_BusFromCtxSTM32(si5351_stm32_i2c_ctx_t *ctx);
 
 #endif
